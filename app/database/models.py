@@ -69,9 +69,7 @@ class ProjectMember(Base):
         primary_key=True,
     )
 
-    role: Mapped[str] = mapped_column(
-        String(16)
-    )
+    role: Mapped[str] = mapped_column(String(16))
 
     project: Mapped["Project"] = relationship(
         back_populates="members",

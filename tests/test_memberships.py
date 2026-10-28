@@ -2,8 +2,8 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from app.database.models import Project, ProjectMember, User
 
@@ -52,23 +52,25 @@ def test_multiple_owners_and_projects(db_session):
 
     db_session.add_all([football, photon, artyom, pavel])
 
-    db_session.add_all([
-        ProjectMember(
-            project=football,
-            user=artyom,
-            role="owner",
-        ),
-        ProjectMember(
-            project=football,
-            user=pavel,
-            role="owner",
-        ),
-        ProjectMember(
-            project=photon,
-            user=artyom,
-            role="editor",
-        ),
-    ])
+    db_session.add_all(
+        [
+            ProjectMember(
+                project=football,
+                user=artyom,
+                role="owner",
+            ),
+            ProjectMember(
+                project=football,
+                user=pavel,
+                role="owner",
+            ),
+            ProjectMember(
+                project=photon,
+                user=artyom,
+                role="editor",
+            ),
+        ]
+    )
 
     db_session.flush()
 
@@ -77,9 +79,7 @@ def test_multiple_owners_and_projects(db_session):
 
     assert len(artyom.memberships) == 2
 
-    assert {
-        member.role for member in artyom.memberships
-    } == {"owner", "editor"}
+    assert {member.role for member in artyom.memberships} == {"owner", "editor"}
 
 
 def test_duplicate_membership_rejected(db_session):
@@ -96,18 +96,20 @@ def test_duplicate_membership_rejected(db_session):
     db_session.add_all([project, user])
     db_session.flush()
 
-    db_session.add_all([
-        ProjectMember(
-            project_id=project.id,
-            user_id=user.telegram_id,
-            role="owner",
-        ),
-        ProjectMember(
-            project_id=project.id,
-            user_id=user.telegram_id,
-            role="editor",
-        ),
-    ])
+    db_session.add_all(
+        [
+            ProjectMember(
+                project_id=project.id,
+                user_id=user.telegram_id,
+                role="owner",
+            ),
+            ProjectMember(
+                project_id=project.id,
+                user_id=user.telegram_id,
+                role="editor",
+            ),
+        ]
+    )
 
     with pytest.raises(IntegrityError):
         db_session.flush()
