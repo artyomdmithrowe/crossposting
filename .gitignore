@@ -30,3 +30,6 @@ __pycache__/
 **/.terraform/
 **/*.tfstate
 **/*.tfstate.*
+
+# Ruff
+.ruff_cache/
