@@ -1,7 +1,7 @@
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -139,3 +139,15 @@ def test_invalid_role_rejected(db_session):
 
     with pytest.raises(IntegrityError):
         db_session.flush()
+
+
+def test_telegram_id_is_required(db_session):
+    # SQLAlchemy mustn't generate Telegram ID.
+    assert User.__table__.c.telegram_id.autoincrement is False
+
+    # PostgreSQL must reject users without Telegram ID.
+    with pytest.raises(IntegrityError):
+        db_session.execute(
+            text("INSERT INTO users (username) VALUES (:username)"),
+            {"username": f"missing_id_{uuid4().hex[:12]}"},
+        )
