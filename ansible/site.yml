@@ -1,0 +1,9 @@
+---
+- name: Configure crossposting server
+  hosts: crossposting
+  become: true
+  roles:
+    - bootstrap
+    - ssh_hardening
+    - firewall
+    - docker

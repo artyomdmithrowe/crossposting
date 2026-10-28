@@ -1,0 +1,17 @@
+---
+- name: Configure SSH authentication
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/00-crossposting.conf
+    content: |
+      PubkeyAuthentication yes
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin no
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Reload SSH
+
+- name: Validate SSH configuration
+  ansible.builtin.command: /usr/sbin/sshd -t
+  changed_when: false
