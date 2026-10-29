@@ -1,4 +1,4 @@
-from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, String
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, ForeignKey, String, false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -46,6 +46,12 @@ class User(Base):
     memberships: Mapped[list["ProjectMember"]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
+    )
+
+    is_platform_admin: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default=false(),
     )
 
 
