@@ -7,9 +7,12 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     String,
+    Text,
+    UniqueConstraint,
     false,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -164,4 +167,162 @@ class ProjectInvitation(Base):
     revoked_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
+    )
+
+
+class Publication(Base):
+    __tablename__ = "publications"
+
+    __table_args__ = (
+        CheckConstraint(
+            "source_type IN ('editor', 'forward', 'channel')",
+            name="ck_publications_source_type",
+        ),
+        CheckConstraint(
+            "status IN ('draft', 'submitted', 'cancelled')",
+            name="ck_publications_status",
+        ),
+        CheckConstraint(
+            "(source_telegram_chat_id IS NULL) = (source_telegram_message_id IS NULL)",
+            name="ck_publications_source_tg_pair",
+        ),
+        UniqueConstraint(
+            "project_id",
+            "source_telegram_chat_id",
+            "source_telegram_message_id",
+            name="uq_publications_source_tg",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    project_id: Mapped[int] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        index=True,
+    )
+
+    created_by_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("users.telegram_id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    source_type: Mapped[str] = mapped_column(String(16))
+
+    status: Mapped[str] = mapped_column(
+        String(16),
+        server_default="draft",
+    )
+
+    source_text: Mapped[str] = mapped_column(
+        Text,
+        server_default="",
+    )
+
+    source_payload: Mapped[dict] = mapped_column(
+        JSONB,
+        default=dict,
+        server_default="{}",
+    )
+
+    source_telegram_chat_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        nullable=True,
+    )
+
+    source_telegram_message_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    deliveries: Mapped[list["PublicationDelivery"]] = relationship(
+        back_populates="publication",
+        cascade="all, delete-orphan",
+    )
+
+
+class PublicationDelivery(Base):
+    __tablename__ = "publication_deliveries"
+
+    __table_args__ = (
+        CheckConstraint(
+            "platform IN ('telegram', 'vk')",
+            name="ck_publication_deliveries_platform",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'publishing', 'published', 'failed')",
+            name="ck_publication_deliveries_status",
+        ),
+        CheckConstraint(
+            "attempts >= 0",
+            name="ck_publication_deliveries_attempts",
+        ),
+        UniqueConstraint(
+            "publication_id",
+            "platform",
+            name="uq_publication_deliveries_platform",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    publication_id: Mapped[int] = mapped_column(
+        ForeignKey("publications.id", ondelete="CASCADE"),
+        index=True,
+    )
+
+    platform: Mapped[str] = mapped_column(String(16))
+
+    status: Mapped[str] = mapped_column(
+        String(16),
+        server_default="pending",
+    )
+
+    text_override: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    payload_override: Mapped[dict | None] = mapped_column(
+        JSONB,
+        nullable=True,
+    )
+
+    destination_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        nullable=True,
+    )
+
+    external_post_id: Mapped[str | None] = mapped_column(
+        String(128),
+        nullable=True,
+    )
+
+    attempts: Mapped[int] = mapped_column(
+        server_default="0",
+    )
+
+    last_error: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    published_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    publication: Mapped["Publication"] = relationship(
+        back_populates="deliveries",
     )
