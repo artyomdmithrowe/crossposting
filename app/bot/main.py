@@ -46,6 +46,14 @@ async def main() -> None:
                 command="start",
                 description="Открыть главное меню",
             ),
+            BotCommand(
+                command="invite",
+                description="Управление приглашениями",
+            ),
+            BotCommand(
+                command="invites",
+                description="Действующие приглашения",
+            ),
         ]
     )
 

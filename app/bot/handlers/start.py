@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.database.models import Project, User
 from app.services.registration import check_access_and_update_profile
 
-router = Router(name="users")
+router = Router(name="start")
 logger = logging.getLogger(__name__)
 
 
@@ -45,7 +45,10 @@ def get_user_access(
         return project_name, role, bool(is_platform_admin)
 
 
-@router.message(CommandStart(), F.chat.type == ChatType.PRIVATE)
+@router.message(
+    CommandStart(deep_link=False),
+    F.chat.type == ChatType.PRIVATE,
+)
 async def command_start(
     message: Message,
     db_sessions: sessionmaker[Session],

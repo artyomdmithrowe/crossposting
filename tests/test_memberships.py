@@ -1,32 +1,12 @@
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
 
 from app.database.models import Project, ProjectMember, User
 from app.services.registration import check_access_and_update_profile
 from scripts.bootstrap_admin import grant_admin_and_owner
-
-
-@pytest.fixture
-def db_session():
-    engine = create_engine("postgresql+psycopg:///crossposting_dev")
-
-    with engine.connect() as connection:
-        transaction = connection.begin()
-
-        try:
-            with Session(
-                bind=connection,
-                join_transaction_mode="create_savepoint",
-            ) as session:
-                yield session
-        finally:
-            transaction.rollback()
-
-    engine.dispose()
 
 
 def test_multiple_owners_and_projects(db_session):
