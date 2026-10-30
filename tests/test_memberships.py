@@ -1,30 +1,12 @@
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import create_engine, text
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
 
 from app.database.models import Project, ProjectMember, User
-
-
-@pytest.fixture
-def db_session():
-    engine = create_engine("postgresql+psycopg:///crossposting_dev")
-
-    with engine.connect() as connection:
-        transaction = connection.begin()
-
-        try:
-            with Session(
-                bind=connection,
-                join_transaction_mode="create_savepoint",
-            ) as session:
-                yield session
-        finally:
-            transaction.rollback()
-
-    engine.dispose()
+from app.services.registration import check_access_and_update_profile
+from scripts.bootstrap_admin import grant_admin_and_owner
 
 
 def test_multiple_owners_and_projects(db_session):
@@ -151,3 +133,163 @@ def test_telegram_id_is_required(db_session):
             text("INSERT INTO users (username) VALUES (:username)"),
             {"username": f"missing_id_{uuid4().hex[:12]}"},
         )
+
+
+def test_existing_user_profile_and_access(db_session):
+    project = Project(
+        slug=f"test_access_{uuid4().hex[:12]}",
+        name="Тестовый проект",
+    )
+
+    telegram_id = -(uuid4().int % 10**12 + 1)
+
+    user = User(
+        telegram_id=telegram_id,
+        username="old_username",
+        first_name="Старое имя",
+    )
+
+    db_session.add_all([project, user])
+    db_session.flush()
+
+    membership = ProjectMember(
+        project_id=project.id,
+        user_id=telegram_id,
+        role="owner",
+    )
+
+    db_session.add(membership)
+    db_session.flush()
+
+    role = check_access_and_update_profile(
+        session=db_session,
+        telegram_id=telegram_id,
+        username="new_username",
+        first_name="Новое имя",
+        project_slug=project.slug,
+    )
+
+    assert role == "owner"
+
+    db_session.flush()
+    db_session.refresh(user)
+
+    assert user.username == "new_username"
+    assert user.first_name == "Новое имя"
+
+
+def test_platform_admin_is_not_granted_automatically(db_session):
+    project = Project(
+        slug=f"test_admin_{uuid4().hex[:12]}",
+        name="Тестовый проект",
+    )
+
+    telegram_id = -(uuid4().int % 10**12 + 1)
+
+    user = User(
+        telegram_id=telegram_id,
+        username="test_admin",
+        first_name="Тест",
+    )
+
+    db_session.add_all([project, user])
+    db_session.flush()
+
+    assert user.is_platform_admin is False
+
+    role = check_access_and_update_profile(
+        session=db_session,
+        telegram_id=telegram_id,
+        username="updated_username",
+        first_name="Тест",
+        project_slug=project.slug,
+    )
+
+    assert role is None
+    assert user.is_platform_admin is False
+
+    # Set is_platform_admin to True.
+    user.is_platform_admin = True
+    db_session.flush()
+
+    # Repeated /start must not change is_platform_admin.
+    check_access_and_update_profile(
+        session=db_session,
+        telegram_id=telegram_id,
+        username="another_username",
+        first_name="Тест",
+        project_slug=project.slug,
+    )
+
+    assert user.is_platform_admin is True
+
+
+def test_unknown_user_is_not_registered(db_session):
+    project = Project(
+        slug=f"test_unknown_{uuid4().hex[:12]}",
+        name="Тестовый проект",
+    )
+
+    db_session.add(project)
+    db_session.flush()
+
+    unknown_id = -(uuid4().int % 10**12 + 1)
+
+    role = check_access_and_update_profile(
+        session=db_session,
+        telegram_id=unknown_id,
+        username="unknown_user",
+        first_name="Неизвестный",
+        project_slug=project.slug,
+    )
+
+    assert role is None
+    assert db_session.get(User, unknown_id) is None
+
+
+def test_bootstrap_admin_is_idempotent(db_session):
+    project = Project(
+        slug=f"test_bootstrap_{uuid4().hex[:12]}",
+        name="Тестовый проект",
+    )
+
+    telegram_id = -(uuid4().int % 10**12 + 1)
+
+    user = User(
+        telegram_id=telegram_id,
+        username="test_admin",
+        first_name="Администратор",
+    )
+
+    db_session.add_all([project, user])
+    db_session.flush()
+
+    # First setting
+    grant_admin_and_owner(
+        session=db_session,
+        telegram_id=telegram_id,
+        project_slug=project.slug,
+    )
+
+    db_session.flush()
+
+    # Repeating setting
+    grant_admin_and_owner(
+        session=db_session,
+        telegram_id=telegram_id,
+        project_slug=project.slug,
+    )
+
+    db_session.flush()
+    db_session.refresh(user)
+
+    memberships = db_session.scalars(
+        select(ProjectMember).where(
+            ProjectMember.project_id == project.id,
+            ProjectMember.user_id == telegram_id,
+        )
+    ).all()
+
+    assert user.is_platform_admin is True
+    assert len(memberships) == 1
+    assert memberships[0].role == "owner"
